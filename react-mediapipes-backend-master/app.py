@@ -51,22 +51,52 @@ def predict_test():
 @app.route("/predict-static-sign", methods=['GET', 'POST'])
 def predict_static_sign():
     if request.method == "POST":
-        with open('staticsign.pkl', 'rb') as f:
-            model = pickle.load(f)
+        try:
+            with open('staticsign.pkl', 'rb') as f:
+                model = pickle.load(f)
 
-            # try:
-            right = request.get_json()["temp"]
+                right = request.get_json()["temp"]
+                
+                # Validate input data
+                if not right or len(right) != 63:  # 21 landmarks * 3 coordinates
+                    return jsonify({
+                        'predict': 'none',
+                        'probability': 0.0,
+                        'error': 'Invalid landmark data'
+                    }), 400
 
-            row = right
-            X = pd.DataFrame([row])
-            predict_class = model.predict(X)[0]
-            prob = model.predict_proba(X)[0]
-            max_prob = prob[np.argmax(prob)]
-        # except:
-        # pass
-        # print(predict_class)
-        data = {'predict': predict_class, 'probability': max_prob}
-        return jsonify(data)
+                row = right
+                X = pd.DataFrame([row])
+                
+                # Make prediction
+                predict_class = model.predict(X)[0]
+                prob = model.predict_proba(X)[0]
+                max_prob = prob[np.argmax(prob)]
+                
+                # Add confidence threshold
+                confidence_threshold = 0.6
+                if max_prob < confidence_threshold:
+                    return jsonify({
+                        'predict': 'none',
+                        'probability': max_prob,
+                        'message': 'Low confidence prediction'
+                    })
+                
+                data = {
+                    'predict': predict_class, 
+                    'probability': max_prob,
+                    'all_probabilities': prob.tolist()  # Return all class probabilities for debugging
+                }
+                return jsonify(data)
+                
+        except Exception as e:
+            print(f"Prediction error: {str(e)}")
+            return jsonify({
+                'predict': 'none',
+                'probability': 0.0,
+                'error': 'Prediction failed'
+            }), 500
+            
     return render_template("index.html")
 
 
